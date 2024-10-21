@@ -1,101 +1,120 @@
-import Image from "next/image";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import queryString from "query-string";
+
+function makeid(length: number) {
+  let result = "";
+  const characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const charactersLength = characters.length;
+  let counter = 0;
+  while (counter < length) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    counter += 1;
+  }
+  return result;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const cookieStore = cookies();
+  const [spotifyToken, spotifyRefresh] = [
+    cookieStore.get("SPOTIFY_TOKEN"),
+    cookieStore.get("SPOTIFY_REFRESH"),
+  ];
+  async function spotifyLogin(formData: FormData) {
+    "use server";
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+    const state = makeid(16);
+    const scope =
+      "user-read-private user-read-email user-read-currently-playing user-read-playback-state";
+
+    return redirect(
+      "https://accounts.spotify.com/authorize?" +
+        queryString.stringify({
+          response_type: "code",
+          client_id: "25b74966608b44139c101e6173b6325f",
+          scope,
+          redirect_uri: "http://localhost:3000/api/callback",
+          state,
+        })
+    );
+  }
+
+  async function spotifyUpdate(formData: FormData) {
+    "use server";
+    const rawData = {
+      username: formData.get("username"),
+      password: formData.get("password"),
+    };
+    const token = cookies().get("SPOTIFY_TOKEN");
+
+    if (!token) {
+      return redirect("/?error=MISSING_TOKEN");
+    }
+    const songData = await fetch("https://api.spotify.com/v1/me/player", {
+      headers: {
+        Authorization: `Bearer ${token.value}`,
+      },
+    })
+      .then((res) => res.json())
+      .catch((res) => redirect("/?error=NOTHING_PLAYING"));
+
+    const songName = songData.item.name;
+    const author = songData.item.artists[0].name;
+
+    await fetch("http://127.0.0.1:8000/update_bio", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: songName,
+        author,
+        username: rawData.username,
+        password: rawData.password,
+      }),
+    })
+      .then((res) => res.json())
+      .then(console.log);
+
+    return redirect("/?success=TRUE");
+  }
+
+  if (spotifyToken && spotifyRefresh) {
+    return (
+      <div>
+        <form action={spotifyUpdate} className="mt-6 w-72 mx-auto">
+          <div className="w-full">
+            <input type="text" name="username" className="p-2 rounded w-full" />
+          </div>
+          <div className="mt-2 w-full">
+            <input
+              type="password"
+              name="password"
+              className="p-2 rounded w-full"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          </div>
+          <div className="mt-4 w-full">
+            <p className="p-2 bg-white text-black mb-2">Login with instagram</p>
+            <button type="submit" className="bg-lime-600 rounded w-full p-2">
+              Update Status
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <form className="mt-6 w-72 mx-auto" action={spotifyLogin}>
+        <div className="flex flex-col justify-center items-center">
+          <div className="mt-4 w-full">
+            <button type="submit" className="bg-lime-600 rounded w-full p-2">
+              Login with spotify
+            </button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </form>
     </div>
   );
 }
