@@ -27,12 +27,12 @@ export default function Home() {
     const state = makeid(16);
     const scope =
       "user-read-private user-read-email user-read-currently-playing user-read-playback-state";
-
+    const spotifyClientId = process.env.SPOTIFY_CLIENT_ID;
     return redirect(
       "https://accounts.spotify.com/authorize?" +
         queryString.stringify({
           response_type: "code",
-          client_id: "25b74966608b44139c101e6173b6325f",
+          client_id: spotifyClientId,
           scope,
           redirect_uri: "http://localhost:3000/api/callback",
           state,
